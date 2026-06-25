@@ -79,7 +79,7 @@ Every feature is engineered around one mission: **get you through the finish lin
 
 The app is deployed and ready to use at:
 
-**[https://last-minute-life-saver-seven.vercel.app](https://last-minute-life-saver-seven.vercel.app)**
+**[https://last-minute-life-saver-seven.vercel.app](https://last-minute-life-saver-seven.vercel.app)**  ,
  **[https://last-minute-life-saver-834131243632.asia-southeast1.run.app/](https://last-minute-life-saver-834131243632.asia-southeast1.run.app/)**
 
 > **Judge / Evaluator?** On the login page, click **🎁 Load Demo Story** to instantly sign in as `judge@lmls.org` with a pre-populated student scenario — no setup needed.
