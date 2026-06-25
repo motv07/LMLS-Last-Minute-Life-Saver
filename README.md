@@ -491,10 +491,6 @@ Please keep PRs focused — one feature or fix per PR. For major changes, open a
 
 ---
 
-## 📄 License
-
-Distributed under the **MIT License**. See [`LICENSE`](./LICENSE) for full text.
-
 ---
 
 <div align="center">
