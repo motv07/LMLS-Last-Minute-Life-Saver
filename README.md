@@ -10,7 +10,7 @@
 [![PWA Ready](https://img.shields.io/badge/PWA-Ready-5cb85c?style=for-the-badge&logo=pwa&logoColor=white)](https://last-minute-life-saver-seven.vercel.app)
 [![Gemini Powered](https://img.shields.io/badge/Gemini%202.0%20Flash-Powered-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://aistudio.google.com)
 [![Zero Install](https://img.shields.io/badge/Zero-Install-ff6b6b?style=for-the-badge&logoColor=white)](https://last-minute-life-saver-seven.vercel.app)
-[![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](./LICENSE)
+
 
 <br/>
 
