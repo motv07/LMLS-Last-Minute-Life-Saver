@@ -18,7 +18,7 @@
 
 <br/>
 
-[🌐 Open Live App](https://last-minute-life-saver-seven.vercel.app) or [Live App(https://last-minute-life-saver-834131243632.asia-southeast1.run.app/)] · [📖 Read the Docs](#-table-of-contents) · [🐛 Report a Bug](https://github.com/motv07/LMLS-Last-Minute-Life-Saver/issues) · [✨ Request Feature](https://github.com/motv07/LMLS-Last-Minute-Life-Saver/issues)
+[🌐 Open Live App](https://last-minute-life-saver-seven.vercel.app) or [Live App](https://last-minute-life-saver-834131243632.asia-southeast1.run.app/) · [📖 Read the Docs](#-table-of-contents) · [🐛 Report a Bug](https://github.com/motv07/LMLS-Last-Minute-Life-Saver/issues) · [✨ Request Feature](https://github.com/motv07/LMLS-Last-Minute-Life-Saver/issues)
 
 </div>
 
