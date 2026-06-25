@@ -1,0 +1,1676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Last-Minute Life Saver — AI-powered productivity companion that proactively helps you plan, prioritize, and complete tasks before deadlines are missed." />
+  <meta name="theme-color" content="#070714" />
+  <title>LMLS — Last-Minute Life Saver | AI Productivity Companion</title>
+
+  <!-- LocalStorage User Isolation Wrapper -->
+  <script>
+    (function() {
+      const originalGet = localStorage.getItem;
+      const originalSet = localStorage.setItem;
+      const originalRemove = localStorage.removeItem;
+
+      const EXCLUDED_KEYS = ['lmls_current_user', 'lmls_users', 'lmls_auth_completed'];
+
+      function getIsolatedKey(key) {
+        if (!key || typeof key !== 'string') return key;
+        if (!key.startsWith('lmls_')) return key;
+        if (EXCLUDED_KEYS.includes(key)) return key;
+        
+        const currentUser = originalGet.call(localStorage, 'lmls_current_user') || 'guest';
+        const suffix = `_${currentUser.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+        
+        if (key.endsWith(suffix)) return key;
+        return `${key}${suffix}`;
+      }
+
+      localStorage.getItem = function(key) {
+        return originalGet.call(localStorage, getIsolatedKey(key));
+      };
+
+      localStorage.setItem = function(key, value) {
+        originalSet.call(localStorage, getIsolatedKey(key), value);
+      };
+
+      localStorage.removeItem = function(key) {
+        originalRemove.call(localStorage, getIsolatedKey(key));
+      };
+
+      localStorage.clear = function() {
+        const currentUser = originalGet.call(localStorage, 'lmls_current_user') || 'guest';
+        const suffix = `_${currentUser.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+        const keysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.endsWith(suffix)) {
+            keysToRemove.push(key);
+          }
+        }
+        keysToRemove.forEach(k => originalRemove.call(localStorage, k));
+      };
+    })();
+  </script>
+
+  <!-- PWA & Mobile Meta Tags -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="apple-touch-icon" href="assets/icon-192.png" />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="styles/main.css" />
+</head>
+<body>
+  <!-- ═══════════════ SPLASH SCREEN ═══════════════ -->
+  <div id="splash-screen">
+    <div class="splash-logo-container">
+      <div class="splash-logo">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none">
+          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="url(#splash-grad)" stroke="url(#splash-grad)" stroke-width="0.5"/>
+          <defs>
+            <linearGradient id="splash-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#7c3aed"/>
+              <stop offset="100%" stop-color="#06b6d4"/>
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+      <h1 class="splash-title">LMLS</h1>
+    </div>
+    <div class="splash-loader-bar">
+      <div class="splash-loader-fill"></div>
+    </div>
+  </div>
+
+  <div id="app">
+    <!-- Aurora Animated Background -->
+    <div class="aurora-bg" aria-hidden="true">
+      <div class="aurora-blob aurora-blob-1"></div>
+      <div class="aurora-blob aurora-blob-2"></div>
+      <div class="aurora-blob aurora-blob-3"></div>
+    </div>
+
+    <!-- ═══════════════ CRISIS ALERT OVERLAY ═══════════════ -->
+    <div id="crisis-overlay" class="crisis-overlay hidden" role="alertdialog" aria-modal="true" aria-labelledby="crisis-title">
+      <div class="crisis-card">
+        <div class="crisis-pulse-ring"></div>
+        <div class="crisis-icon">🚨</div>
+        <h2 id="crisis-title" class="crisis-title">CRISIS DETECTED</h2>
+        <p id="crisis-subtitle" class="crisis-subtitle">A deadline is critically close!</p>
+        <div id="crisis-task-name" class="crisis-task-name"></div>
+        <div id="crisis-time-left" class="crisis-time-left"></div>
+        <div id="crisis-ai-plan" class="crisis-ai-plan">
+          <div class="crisis-ai-header">
+            <span class="ai-badge">AI RECOVERY PLAN</span>
+          </div>
+          <div id="crisis-plan-content" class="crisis-plan-content"></div>
+        </div>
+        <div class="crisis-actions">
+          <button id="btn-crisis-focus" class="btn btn-danger btn-lg" onclick="crisisStartFocus()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            Start Focus Now
+          </button>
+          <button class="btn btn-ghost" onclick="dismissCrisis()">Dismiss</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ TOAST NOTIFICATIONS ═══════════════ -->
+    <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+    <!-- ═══════════════ SIDEBAR ═══════════════ -->
+    <aside class="sidebar" id="sidebar" role="navigation" aria-label="Main navigation">
+      <!-- Logo -->
+      <div class="sidebar-logo">
+        <div class="logo-icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="url(#logo-grad)" stroke="url(#logo-grad)" stroke-width="0.5"/>
+            <defs>
+              <linearGradient id="logo-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#7c3aed"/>
+                <stop offset="100%" stop-color="#06b6d4"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <div class="logo-text">
+          <span class="logo-name">LMLS</span>
+          <span class="logo-tagline">Life Saver</span>
+        </div>
+        <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Toggle sidebar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+      </div>
+
+      <!-- Urgency Pulse Indicator -->
+      <div class="urgency-indicator" id="urgency-indicator">
+        <div class="urgency-bar">
+          <div class="urgency-fill" id="urgency-fill" style="width: 0%"></div>
+        </div>
+        <div class="urgency-label">
+          <span>Stress Level</span>
+          <span id="urgency-label-val">Calm</span>
+        </div>
+      </div>
+
+      <!-- Nav Items -->
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item active" id="nav-dashboard" onclick="navigateTo('dashboard')" aria-label="Dashboard">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          <span class="nav-label">Dashboard</span>
+          <span class="nav-badge" id="badge-dashboard"></span>
+        </a>
+        <a href="#" class="nav-item" id="nav-tasks" onclick="navigateTo('tasks')" aria-label="Tasks">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+          <span class="nav-label">Tasks</span>
+          <span class="nav-badge" id="badge-tasks"></span>
+        </a>
+        <a href="#" class="nav-item" id="nav-ai" onclick="navigateTo('ai')" aria-label="AI Agent">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 017 7 7 7 0 01-7 7 7 7 0 01-7-7 7 7 0 017-7z"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span class="nav-label">AI Agent</span>
+          <div class="nav-ai-dot"></div>
+        </a>
+        <a href="#" class="nav-item" id="nav-schedule" onclick="navigateTo('schedule')" aria-label="Schedule">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <span class="nav-label">Schedule</span>
+        </a>
+        <a href="#" class="nav-item" id="nav-habits" onclick="navigateTo('habits')" aria-label="Habits">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
+          <span class="nav-label">Habits</span>
+          <span class="nav-badge" id="badge-habits"></span>
+        </a>
+        <a href="#" class="nav-item" id="nav-focus" onclick="navigateTo('focus')" aria-label="Focus Mode">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <span class="nav-label">Focus</span>
+        </a>
+        <a href="#" class="nav-item" id="nav-analytics" onclick="navigateTo('analytics')" aria-label="Analytics">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          <span class="nav-label">Analytics</span>
+        </a>
+        <a href="#" class="nav-item" id="nav-calendar" onclick="navigateTo('calendar')" aria-label="Manual Calendar">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01"/></svg>
+          <span class="nav-label">Calendar</span>
+        </a>
+      </nav>
+
+      <!-- Bottom: Settings & User -->
+      <div class="sidebar-bottom">
+        <a href="#" class="nav-item" id="nav-settings" onclick="navigateTo('settings')" aria-label="Settings">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+          <span class="nav-label">Settings</span>
+        </a>
+        <div class="user-avatar-mini">
+          <div class="avatar-circle" id="user-avatar-mini">U</div>
+          <div class="user-info-mini">
+            <span class="user-name-mini" id="user-name-mini">User</span>
+            <span class="user-status-mini">🟢 Active</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ═══════════════ MAIN CONTENT ═══════════════ -->
+    <main class="main-content" id="main-content">
+
+      <!-- Top Bar -->
+      <header class="topbar" id="topbar">
+        <div class="topbar-left">
+          <div class="page-title-group">
+            <h1 class="page-title" id="page-title">Dashboard</h1>
+            <span class="page-subtitle" id="page-subtitle">Good morning! Here's your day at a glance.</span>
+          </div>
+        </div>
+        <div class="topbar-right">
+          <!-- Theme Toggle Button -->
+          <button class="btn btn-icon btn-ghost theme-btn" id="theme-btn" aria-label="Toggle theme" title="Toggle dark/light mode">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="theme-icon-dark"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="theme-icon-light hidden"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+          </button>
+          <!-- Voice Button -->
+          <button class="btn btn-icon btn-ghost voice-btn" id="voice-btn" aria-label="Voice input" title="Voice commands">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+          </button>
+          <!-- Network Status Badge -->
+          <div class="network-status" id="network-status" title="Connection status">
+            <span class="network-dot online"></span>
+            <span class="network-text">Online</span>
+          </div>
+          <!-- XP Badge -->
+          <div class="xp-badge" id="xp-badge" title="Your XP and Level">
+            <span>⚡</span>
+            <span id="xp-value">0 XP</span>
+            <span class="xp-level-label" id="xp-level">· Lv 1</span>
+          </div>
+          <!-- Quick Add Task -->
+          <button class="btn btn-primary" id="btn-quick-add" onclick="openAddTaskModal()" aria-label="Add new task">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Add Task
+          </button>
+          <!-- Clock -->
+          <div class="live-clock" id="live-clock">
+            <span id="clock-time">00:00</span>
+            <span id="clock-date">Mon, Jan 1</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- ─── VIEW: DASHBOARD ─── -->
+      <section class="view active" id="view-dashboard">
+        <!-- Dashboard Hero -->
+        <div class="dashboard-hero" id="dashboard-hero">
+          <div class="hero-ring-wrap">
+            <svg class="hero-ring-svg" viewBox="0 0 120 120">
+              <defs>
+                <linearGradient id="hero-ring-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#7c3aed"/>
+                  <stop offset="50%" stop-color="#06b6d4"/>
+                  <stop offset="100%" stop-color="#10b981"/>
+                </linearGradient>
+              </defs>
+              <circle class="hero-ring-track" cx="60" cy="60" r="45"/>
+              <circle class="hero-ring-fill" id="hero-ring-fill" cx="60" cy="60" r="45"/>
+            </svg>
+            <div class="hero-ring-center">
+              <div class="hero-ring-value" id="hero-ring-value">0</div>
+              <div class="hero-ring-label">score</div>
+            </div>
+          </div>
+          <div class="hero-stats">
+            <div class="hero-greeting">Good <span id="hero-greeting-time">morning</span>, <span id="hero-greeting-name">there</span>! 👋</div>
+            <div class="hero-subtext" id="hero-subtext">Here's your productivity snapshot for today.</div>
+            <div class="hero-pills">
+              <div class="hero-pill hero-pill--done" id="hero-pill-done">
+                <span class="hero-pill-icon">✅</span>
+                <span id="hero-pill-done-val">0 done</span>
+              </div>
+              <div class="hero-pill hero-pill--due" id="hero-pill-due">
+                <span class="hero-pill-icon">🔥</span>
+                <span id="hero-pill-due-val">0 due today</span>
+              </div>
+              <div class="hero-pill hero-pill--focus" id="hero-pill-focus">
+                <span class="hero-pill-icon">⏱️</span>
+                <span id="hero-pill-focus-val">0 focus sessions</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- AI Insights Carousel -->
+        <div class="dash-card card-span-2 ai-insights-carousel-card" id="ai-insights-carousel-card">
+          <div class="carousel-progress-bar-wrap">
+            <div class="carousel-progress-bar" id="carousel-progress-bar"></div>
+          </div>
+          <div class="carousel-content-wrap">
+            <div class="carousel-slide-info">
+              <div class="carousel-tag">🤖 AI COACHING INSIGHT</div>
+              <h3 class="carousel-headline" id="carousel-headline" style="transition: opacity 0.2s ease;">Analyzing your workload...</h3>
+              <p class="carousel-explanation" id="carousel-explanation" style="transition: opacity 0.2s ease;">Gemini is preparing personalized productivity insights to keep you on track.</p>
+            </div>
+            <div class="carousel-action-wrap">
+              <button class="btn btn-primary" id="carousel-cta-btn" onclick="handleCarouselCTA()" style="transition: opacity 0.2s ease;">Get Started</button>
+            </div>
+          </div>
+          <div class="carousel-dots" id="carousel-dots">
+            <span class="carousel-dot active" onclick="setCarouselSlide(0)"></span>
+            <span class="carousel-dot" onclick="setCarouselSlide(1)"></span>
+            <span class="carousel-dot" onclick="setCarouselSlide(2)"></span>
+          </div>
+        </div>
+
+        <!-- Demo Walkthrough Banner -->
+        <div id="demo-mode-banner" class="demo-banner hidden">
+          <div class="demo-banner-content">
+            <span class="demo-banner-badge">🎁 JUDGE DEMO MODE ACTIVATED</span>
+            <p>Welcome! We loaded a custom scenario for <strong id="demo-banner-username">Vishwak</strong>. Notice the <strong>🚨 Crisis Alert</strong> triggered by the <span id="demo-banner-task-name">CS Final Project Submission</span> due in 90 minutes. Try opening the AI Agent to review the recovery plan!</p>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="dismissDemoBanner()">Dismiss</button>
+        </div>
+
+        <!-- Stats Row -->
+        <div class="stats-grid" id="stats-grid">
+          <div class="stat-card stat-card--tasks">
+            <div class="stat-icon">✅</div>
+            <div class="stat-body">
+              <div class="stat-value" id="stat-total">0</div>
+              <div class="stat-label">Total Tasks</div>
+            </div>
+            <div class="stat-trend" id="trend-total"></div>
+          </div>
+          <div class="stat-card stat-card--urgent">
+            <div class="stat-icon">🔥</div>
+            <div class="stat-body">
+              <div class="stat-value" id="stat-urgent">0</div>
+              <div class="stat-label">Due Today</div>
+            </div>
+            <div class="stat-pulse" id="pulse-urgent"></div>
+          </div>
+          <div class="stat-card stat-card--completed">
+            <div class="stat-icon">🏆</div>
+            <div class="stat-body">
+              <div class="stat-value" id="stat-completed">0</div>
+              <div class="stat-label">Completed</div>
+            </div>
+            <div class="stat-ring">
+              <svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15.9" fill="none" stroke="rgba(16,185,129,0.15)" stroke-width="3"/><circle cx="18" cy="18" r="15.9" fill="none" stroke="#10b981" stroke-width="3" stroke-dasharray="0,100" id="completion-ring" stroke-linecap="round" transform="rotate(-90 18 18)"/></svg>
+            </div>
+          </div>
+          <div class="stat-card stat-card--score">
+            <div class="stat-icon">⚡</div>
+            <div class="stat-body">
+              <div class="stat-value" id="stat-score">0</div>
+              <div class="stat-label">Productivity Score</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Overload Alert Placeholder -->
+        <div id="overload-alert-container" style="margin-bottom: var(--space-md);"></div>
+
+        <!-- Dashboard Grid -->
+        <div class="dashboard-grid">
+          <!-- Priority Queue -->
+          <div class="dash-card priority-queue">
+            <div class="dash-card-header">
+              <h2 class="dash-card-title">
+                <span class="title-icon">🎯</span> Priority Queue
+              </h2>
+              <button class="btn btn-ghost btn-sm" onclick="navigateTo('tasks')">View All →</button>
+            </div>
+            <div class="task-list-mini" id="priority-queue-list">
+              <div class="empty-state-mini">
+                <span>No tasks yet.</span>
+                <button class="btn btn-primary btn-sm" onclick="openAddTaskModal()">+ Add First Task</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- AI Briefing Card -->
+          <div class="dash-card ai-briefing-card">
+            <div class="dash-card-header">
+              <h2 class="dash-card-title">
+                <span class="title-icon">🤖</span> AI Briefing
+              </h2>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <button id="btn-regenerate-briefing" class="btn btn-ghost btn-sm hidden" onclick="renderAIBriefing(true)" style="padding: 4px 8px; font-size: 11px;">🔄 Refresh</button>
+                <div class="ai-status-dot"></div>
+              </div>
+            </div>
+            <div class="ai-briefing-content" id="ai-briefing-content">
+              <div class="briefing-placeholder">
+                <div class="briefing-bot-icon">🧠</div>
+                <p>Configure your Gemini API key in Settings to activate your AI companion.</p>
+                <button class="btn btn-primary btn-sm" onclick="navigateTo('settings')">Setup AI →</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Today's Timeline -->
+          <div class="dash-card timeline-card">
+            <div class="dash-card-header">
+              <h2 class="dash-card-title">
+                <span class="title-icon">📅</span> Today's Focus
+              </h2>
+              <span class="dash-card-date" id="today-date-label"></span>
+            </div>
+            <div class="timeline-list" id="timeline-list">
+              <div class="timeline-empty">
+                <span>No tasks scheduled for today</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Habit Streaks Mini -->
+          <div class="dash-card habits-mini-card">
+            <div class="dash-card-header">
+              <h2 class="dash-card-title">
+                <span class="title-icon">🔥</span> Habit Streaks
+              </h2>
+              <button class="btn btn-ghost btn-sm" onclick="navigateTo('habits')">Manage →</button>
+            </div>
+            <div class="habits-mini-list" id="habits-mini-list">
+              <div class="empty-state-mini">
+                <span>No habits tracked yet.</span>
+                <button class="btn btn-ghost btn-sm" onclick="navigateTo('habits')">+ Add Habit</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Upcoming Calendar Events -->
+          <div class="dash-card gcal-meetings-card">
+            <div class="dash-card-header">
+              <h2 class="dash-card-title">
+                <span class="title-icon">📅</span> Upcoming Events
+              </h2>
+              <button class="btn btn-ghost btn-sm" onclick="navigateTo('calendar')" id="gcal-dash-connect-btn">View Calendar →</button>
+            </div>
+            <div class="gcal-events-list" id="gcal-dashboard-card">
+              <div class="gcal-empty">
+                <span class="gcal-empty-icon">📅</span>
+                <p>No upcoming events scheduled.</p>
+                <button class="btn btn-ghost btn-sm" onclick="navigateTo('calendar')">Go to Calendar →</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── VIEW: TASKS ─── -->
+      <section class="view" id="view-tasks">
+        <!-- Filters Bar -->
+        <div class="tasks-toolbar">
+          <div class="filter-group">
+            <button class="filter-chip active" data-filter="all" onclick="filterTasks('all', this)">All</button>
+            <button class="filter-chip" data-filter="pending" onclick="filterTasks('pending', this)">Pending</button>
+            <button class="filter-chip" data-filter="in_progress" onclick="filterTasks('in_progress', this)">In Progress</button>
+            <button class="filter-chip" data-filter="completed" onclick="filterTasks('completed', this)">Completed</button>
+            <button class="filter-chip filter-chip--danger" data-filter="overdue" onclick="filterTasks('overdue', this)">Overdue</button>
+          </div>
+          <div class="view-toggle-group">
+            <button class="btn btn-ghost btn-sm active" id="btn-list-view" onclick="setTasksViewMode('list')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+              List
+            </button>
+            <button class="btn btn-ghost btn-sm" id="btn-kanban-view" onclick="setTasksViewMode('kanban')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+              Kanban
+            </button>
+          </div>
+          <div class="task-action-buttons" style="display:flex; gap:var(--space-sm); align-items:center;">
+            <button class="btn btn-primary btn-sm" onclick="openAddTaskModal()">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add Task
+            </button>
+            <button class="btn btn-secondary btn-sm" onclick="openAddHeadingModal()">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add Heading
+            </button>
+            <button class="btn btn-secondary btn-sm" onclick="openAddCategoryModal()">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add Category
+            </button>
+          </div>
+          <div class="sort-group">
+            <select class="select-mini" id="sort-select" onchange="sortTasks(this.value)">
+              <option value="urgency">Sort: ⚡ Urgency</option>
+              <option value="deadline">Sort: 📅 Deadline</option>
+              <option value="priority">Sort: 🎯 Priority</option>
+              <option value="created">Sort: 🆕 Newest</option>
+            </select>
+            <select class="select-mini" id="category-filter" onchange="filterByCategory(this.value)">
+              <option value="all">All Categories</option>
+              <option value="work">💼 Work</option>
+              <option value="personal">🏠 Personal</option>
+              <option value="health">💖 Health</option>
+              <option value="finance">💰 Finance</option>
+              <option value="education">📚 Education</option>
+              <option value="other">📌 Other</option>
+            </select>
+          </div>
+          <div class="search-box">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" id="task-search" placeholder="Search tasks..." oninput="searchTasks(this.value)" />
+          </div>
+        </div>
+
+        <!-- Task Grid -->
+        <div class="task-grid" id="task-grid">
+          <div class="tasks-empty-state" id="tasks-empty">
+            <div class="empty-illustration">📭</div>
+            <h3>No tasks found</h3>
+            <p>Add your first task to get started</p>
+            <button class="btn btn-primary" onclick="openAddTaskModal()">+ Add Task</button>
+          </div>
+        </div>
+
+        <!-- Kanban Board (hidden by default) -->
+        <div class="kanban-board hidden" id="kanban-board">
+          <div class="kanban-column" id="kanban-col-todo" ondragover="allowDrop(event)" ondragleave="handleDragLeave(event)" ondrop="handleKanbanDrop(event, 'pending')">
+            <div class="kanban-column-header">
+              <span class="kanban-column-dot todo"></span>
+              <h3>To Do</h3>
+              <span class="kanban-column-count" id="kanban-count-todo">0</span>
+            </div>
+            <div class="kanban-cards-container" id="kanban-cards-todo"></div>
+          </div>
+          
+          <div class="kanban-column" id="kanban-col-progress" ondragover="allowDrop(event)" ondragleave="handleDragLeave(event)" ondrop="handleKanbanDrop(event, 'in_progress')">
+            <div class="kanban-column-header">
+              <span class="kanban-column-dot progress"></span>
+              <h3>In Progress</h3>
+              <span class="kanban-column-count" id="kanban-count-progress">0</span>
+            </div>
+            <div class="kanban-cards-container" id="kanban-cards-progress"></div>
+          </div>
+          
+          <div class="kanban-column" id="kanban-col-done" ondragover="allowDrop(event)" ondragleave="handleDragLeave(event)" ondrop="handleKanbanDrop(event, 'completed')">
+            <div class="kanban-column-header">
+              <span class="kanban-column-dot done"></span>
+              <h3>Done</h3>
+              <span class="kanban-column-count" id="kanban-count-done">0</span>
+            </div>
+            <div class="kanban-cards-container" id="kanban-cards-done"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── VIEW: AI AGENT ─── -->
+      <section class="view" id="view-ai">
+        <div class="ai-layout">
+          <!-- Chat Panel -->
+          <div class="chat-panel">
+            <div class="chat-header">
+              <div class="chat-agent-info">
+                <div class="agent-avatar">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 017 7 7 7 0 01-7 7 7 7 0 01-7-7 7 7 0 017-7z"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                </div>
+                <div>
+                  <div class="agent-name">LMLS AI Agent</div>
+                  <div class="agent-subtitle" id="active-model-badge">⚡ Powered by Gemini</div>
+                </div>
+              </div>
+              <div class="agent-controls">
+                <button class="btn btn-ghost btn-sm" onclick="clearChat()">Clear Chat</button>
+                <div class="ai-status-indicator" id="ai-status-indicator">
+                  <div class="ai-status-dot"></div>
+                  <span id="ai-status-text">Ready</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Chat Messages -->
+            <div class="chat-messages" id="chat-messages">
+              <div class="chat-message ai-message">
+                <div class="msg-avatar">🤖</div>
+                <div class="msg-bubble">
+                  <p>Hey! I'm your AI productivity companion. I have full context of all your tasks and deadlines.</p>
+                  <p>Try asking me:</p>
+                  <div class="suggestion-chips">
+                    <button class="suggestion-chip" onclick="sendSuggestion('What should I work on right now?')">What should I do right now?</button>
+                    <button class="suggestion-chip" onclick="sendSuggestion('Plan my day for maximum productivity')">Plan my day</button>
+                    <button class="suggestion-chip" onclick="sendSuggestion('Which tasks are at risk of being missed?')">Tasks at risk?</button>
+                    <button class="suggestion-chip" onclick="sendSuggestion('Give me a motivational boost')">Motivate me!</button>
+                  </div>
+                  <span class="msg-time">Just now</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Chat Input -->
+            <div class="chat-input-area">
+              <div class="chat-input-wrapper">
+                <button class="btn btn-icon btn-ghost" id="voice-chat-btn" aria-label="Voice input for chat" title="Voice input">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg>
+                </button>
+                <textarea
+                  id="chat-input"
+                  class="chat-textarea"
+                  placeholder="Ask your AI companion anything about your tasks..."
+                  rows="1"
+                  onkeydown="handleChatKey(event)"
+                  oninput="autoResizeTextarea(this)"
+                ></textarea>
+                <button class="btn btn-primary btn-icon send-btn" id="send-btn" onclick="sendChatMessage()" aria-label="Send message">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                </button>
+              </div>
+              <div class="chat-hints">
+                <span>Press <kbd>Enter</kbd> to send • <kbd>Shift+Enter</kbd> for new line</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Context Panel -->
+          <div class="context-panel">
+            <div class="context-header">
+              <h3>AI Context</h3>
+              <span class="context-badge">LIVE</span>
+            </div>
+            <div class="context-section">
+              <div class="context-label">Tasks in context</div>
+              <div class="context-value" id="ctx-task-count">0 tasks</div>
+            </div>
+            <div class="context-section">
+              <div class="context-label">Most urgent</div>
+              <div class="context-value urgent-text" id="ctx-most-urgent">None</div>
+            </div>
+            <div class="context-section">
+              <div class="context-label">Overdue</div>
+              <div class="context-value" id="ctx-overdue">0</div>
+            </div>
+            <div class="context-section">
+              <div class="context-label">Due today</div>
+              <div class="context-value" id="ctx-today">0</div>
+            </div>
+            <div class="context-section">
+              <div class="context-label">API Status</div>
+              <div class="context-value" id="ctx-api-status">⚙️ Not configured</div>
+            </div>
+            <div class="context-divider"></div>
+            <div class="context-actions">
+              <button class="btn btn-primary btn-sm btn-full" onclick="generateAISchedule()">
+                🗓️ Plan My Day
+              </button>
+              <button class="btn btn-ghost btn-sm btn-full" onclick="runAIWorkloadAnalysis()">
+                📊 Analyze Workload
+              </button>
+              <button class="btn btn-ghost btn-sm btn-full" onclick="runAIProcrastinationDetector()">
+                💡 Beat Procrastination
+              </button>
+              <button class="btn btn-ghost btn-sm btn-full" id="btn-ai-reschedule" onclick="runAIReschedule()" style="border-color:rgba(245,158,11,0.3);color:#f59e0b;">
+                🔄 AI Reschedule Overdue
+              </button>
+            </div>
+
+            <!-- Agent Activity Log -->
+            <div class="agent-log-panel">
+              <div class="agent-log-header">
+                <span>🤖 Agent Activity Log</span>
+                <span class="context-badge">LIVE</span>
+              </div>
+              <div class="agent-activity-log" id="agent-activity-log">
+                <div class="agent-log-empty">Agent is monitoring your tasks...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── VIEW: SCHEDULE ─── -->
+      <section class="view" id="view-schedule">
+        <div class="schedule-layout">
+          <div class="schedule-header-bar">
+            <div class="schedule-nav">
+              <button class="btn btn-ghost btn-icon" onclick="scheduleNavDay(-1)">‹</button>
+              <span class="schedule-current-date" id="schedule-date-label">Today</span>
+              <button class="btn btn-ghost btn-icon" onclick="scheduleNavDay(1)">›</button>
+            </div>
+            <div class="schedule-actions">
+              <button class="btn btn-secondary btn-sm" id="btn-add-manual-event" onclick="openManualEventModal()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add Event
+              </button>
+              <button class="btn btn-primary btn-sm" id="btn-ai-schedule" onclick="generateAISchedule()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 017 7 7 7 0 01-7 7 7 7 0 01-7-7 7 7 0 017-7z"/></svg>
+                AI Schedule
+              </button>
+              <button class="btn btn-ghost btn-sm" onclick="clearSchedule()">Clear</button>
+            </div>
+          </div>
+          <div id="schedule-conflict-banner" class="schedule-conflict-banner" style="display: none;"></div>
+          <div class="schedule-main">
+            <!-- Sidebar for dragging pending tasks -->
+            <aside class="schedule-sidebar">
+              <h3 class="schedule-sidebar-title">📋 Drag Tasks to Schedule</h3>
+              <div class="unscheduled-tasks-list" id="unscheduled-tasks-list">
+                <!-- populated by Scheduler.renderSidebar() -->
+              </div>
+            </aside>
+
+            <div class="schedule-grid-wrapper">
+              <div class="schedule-time-col" id="schedule-time-col"></div>
+              <div class="schedule-blocks-col" id="schedule-blocks-col">
+                <div class="current-time-indicator" id="current-time-indicator"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── VIEW: HABITS ─── -->
+      <section class="view" id="view-habits">
+        <div class="habits-layout">
+          <div class="habits-toolbar">
+            <h2 class="section-title">Your Habits</h2>
+            <button class="btn btn-primary" onclick="openAddHabitModal()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add Habit
+            </button>
+          </div>
+          <div class="habits-grid" id="habits-grid">
+            <div class="habits-empty">
+              <div class="empty-illustration">🌱</div>
+              <h3>Start Your Habit Journey</h3>
+              <p>Track daily habits and build streaks to boost your productivity</p>
+              <button class="btn btn-primary" onclick="openAddHabitModal()">+ Add First Habit</button>
+            </div>
+          </div>
+          <!-- Habit Stats Grid -->
+          <div class="habit-stats-grid" id="habit-stats-grid" style="display:none">
+            <div class="habit-stat-card">
+              <div class="habit-stat-val" id="habit-stat-total-completions">0</div>
+              <div class="habit-stat-label">Total Completions</div>
+            </div>
+            <div class="habit-stat-card">
+              <div class="habit-stat-val" id="habit-stat-best-streak">0</div>
+              <div class="habit-stat-label">Best Streak</div>
+            </div>
+            <div class="habit-stat-card">
+              <div class="habit-stat-val" id="habit-stat-completion-rate">0%</div>
+              <div class="habit-stat-label">Completion Rate</div>
+            </div>
+          </div>
+
+          <!-- Heatmap & AI Coaching Row -->
+          <div class="habits-details-row" style="display:none" id="habits-details-row">
+            <!-- Heatmap Section -->
+            <div class="habit-heatmap-section" id="habit-heatmap-section">
+              <div class="heatmap-header">
+                <h3 class="section-title-sm">90-Day Contribution Heatmap</h3>
+                <select id="heatmap-habit-select" class="select-mini" onchange="renderHeatmap()">
+                  <!-- Dynamically populated -->
+                </select>
+              </div>
+              <div class="heatmap-grid-wrapper">
+                <div class="heatmap-grid" id="heatmap-grid"></div>
+              </div>
+            </div>
+
+            <!-- AI Coach Section -->
+            <div class="habits-ai-card">
+              <div class="ai-card-header">
+                <h3 class="section-title-sm">🧠 AI Habit Coach</h3>
+                <button class="btn btn-primary btn-sm" id="btn-analyze-habits" onclick="analyzeHabits()">
+                  Analyze Habits
+                </button>
+              </div>
+              <div class="ai-coach-content" id="ai-coach-content">
+                <p class="text-muted">Click "Analyze Habits" to get custom streaking plans, habits-tasks correlation insights, and personalized coaching from Gemini.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── VIEW: FOCUS ─── -->
+      <section class="view" id="view-focus">
+        <div class="focus-layout">
+          <!-- Timer -->
+          <div class="timer-card">
+            <div class="timer-mode-tabs">
+              <button class="timer-tab active" id="tab-pomodoro" onclick="setTimerMode('pomodoro', this)">Pomodoro</button>
+              <button class="timer-tab" id="tab-short" onclick="setTimerMode('short', this)">Short Break</button>
+              <button class="timer-tab" id="tab-long" onclick="setTimerMode('long', this)">Long Break</button>
+            </div>
+            <div class="timer-display">
+              <svg class="timer-ring" viewBox="0 0 200 200">
+                <circle cx="100" cy="100" r="88" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="8"/>
+                <circle cx="100" cy="100" r="88" fill="none" stroke="url(#timer-grad)" stroke-width="8"
+                  stroke-dasharray="553" stroke-dashoffset="0" stroke-linecap="round"
+                  transform="rotate(-90 100 100)" id="timer-progress-ring"/>
+                <defs>
+                  <linearGradient id="timer-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#7c3aed"/>
+                    <stop offset="100%" stop-color="#06b6d4"/>
+                  </linearGradient>
+                </defs>
+              </svg>
+              <div class="timer-text">
+                <div class="timer-countdown" id="timer-display">25:00</div>
+                <div class="timer-label" id="timer-label">Focus Session</div>
+              </div>
+            </div>
+            <div class="timer-controls">
+              <button class="btn btn-ghost btn-icon" onclick="resetTimer()" aria-label="Reset timer">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+              </button>
+              <button class="btn btn-primary btn-lg" id="timer-btn" onclick="toggleTimer()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" id="timer-play-icon"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <span id="timer-btn-text">Start</span>
+              </button>
+              <button class="btn btn-ghost btn-icon" onclick="skipTimer()" aria-label="Skip session">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+              </button>
+            </div>
+            <div class="pomodoro-count">
+              <span id="pomodoro-count-text">Session 1 of 4</span>
+              <div class="pomodoro-dots" id="pomodoro-dots">
+                <div class="pomo-dot active"></div>
+                <div class="pomo-dot"></div>
+                <div class="pomo-dot"></div>
+                <div class="pomo-dot"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Focus Task Selector -->
+          <div class="focus-task-panel">
+            <div class="focus-task-header">
+              <h3>Focusing On</h3>
+              <button class="btn btn-ghost btn-sm" onclick="openFocusTaskPicker()">Change</button>
+            </div>
+            <div class="focus-task-display" id="focus-task-display">
+              <div class="focus-task-empty">
+                <p>No task selected</p>
+                <button class="btn btn-primary btn-sm" onclick="openFocusTaskPicker()">Pick a Task</button>
+              </div>
+            </div>
+            <!-- Sessions Today -->
+            <div class="sessions-today">
+              <div class="sessions-label">Sessions Today</div>
+              <div class="sessions-count" id="sessions-today-count">0</div>
+            </div>
+            <!-- AI Suggestion -->
+            <div class="ai-focus-suggestion" id="ai-focus-suggestion">
+              <div class="suggestion-header">
+                <span class="ai-badge-sm">AI PICK</span>
+              </div>
+              <p id="ai-suggestion-text">Add tasks to get an AI recommendation for your focus session.</p>
+              <button class="btn btn-ghost btn-sm" onclick="getAIFocusSuggestion()">🤖 Ask AI</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── VIEW: ANALYTICS ─── -->
+      <section class="view" id="view-analytics">
+        <div class="analytics-layout">
+          <!-- Score Card -->
+          <div class="analytics-hero">
+            <div class="productivity-score-card">
+              <div class="score-ring-wrapper">
+                <svg viewBox="0 0 120 120" class="score-ring-svg">
+                  <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(124,58,237,0.15)" stroke-width="10"/>
+                  <circle cx="60" cy="60" r="50" fill="none" stroke="url(#score-grad)" stroke-width="10"
+                    stroke-dasharray="314" stroke-dashoffset="314" stroke-linecap="round"
+                    transform="rotate(-90 60 60)" id="score-ring-circle"/>
+                  <defs>
+                    <linearGradient id="score-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stop-color="#7c3aed"/>
+                      <stop offset="100%" stop-color="#06b6d4"/>
+                    </linearGradient>
+                  </defs>
+                </svg>
+                <div class="score-value" id="analytics-score">0</div>
+              </div>
+              <div class="score-info">
+                <h2>Productivity Score</h2>
+                <p id="score-description">Complete tasks on time to improve your score</p>
+                <div class="score-breakdown" id="score-breakdown"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Analytics Grid -->
+          <div class="analytics-grid">
+            <div class="analytics-card">
+              <h3 class="analytics-card-title">📊 Task Overview</h3>
+              <div class="chart-bars" id="chart-task-overview"></div>
+            </div>
+            <div class="analytics-card">
+              <h3 class="analytics-card-title">⏱️ Completion Rate</h3>
+              <div class="completion-rate-display" id="completion-rate-display">
+                <div class="rate-value" id="completion-rate-val">0%</div>
+                <div class="rate-label">Tasks completed on time</div>
+                <div class="rate-bar-wrapper">
+                  <div class="rate-bar" id="completion-rate-bar" style="width:0%"></div>
+                </div>
+              </div>
+            </div>
+            <div class="analytics-card">
+              <h3 class="analytics-card-title">📈 Weekly Progress</h3>
+              <div class="weekly-chart" id="weekly-chart"></div>
+            </div>
+            <div class="analytics-card">
+              <h3 class="analytics-card-title">🏷️ By Category</h3>
+              <div class="category-breakdown" id="category-breakdown"></div>
+          </div>
+
+          <!-- Extended Analytics Section -->
+          <div class="analytics-grid-extended">
+            <!-- 30-Day Trend Card -->
+            <div class="analytics-card card-span-2">
+              <h3 class="analytics-card-title">📈 30-Day Productivity Trend</h3>
+              <div class="trend-chart-wrapper" style="position: relative; width: 100%; min-height: 220px; padding: 10px;">
+                <canvas id="trend-chart-canvas"></canvas>
+              </div>
+            </div>
+
+            <!-- Est vs Act Time Card -->
+            <div class="analytics-card">
+              <h3 class="analytics-card-title">⏱️ Estimated vs Actual Time (Recent Tasks)</h3>
+              <div class="est-act-chart-wrapper" style="position: relative; width: 100%; min-height: 220px; padding: 10px;">
+                <canvas id="est-act-chart-canvas"></canvas>
+              </div>
+            </div>
+
+            <!-- Focus Sessions per Day -->
+            <div class="analytics-card">
+              <h3 class="analytics-card-title">⏱️ Focus Sessions (Last 7 Days)</h3>
+              <div class="focus-sessions-chart-wrapper" style="position: relative; width: 100%; min-height: 220px; padding: 10px;">
+                <canvas id="focus-sessions-chart-canvas"></canvas>
+              </div>
+            </div>
+
+            <!-- Habit Streaks Grid -->
+            <div class="analytics-card card-span-2">
+              <h3 class="analytics-card-title">🔥 Habit Consistency Grid (Last 30 Days)</h3>
+              <div class="habit-consistency-container" style="padding: var(--space-md);">
+                <div class="habit-consistency-grid" id="habit-consistency-grid" style="display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, 1fr); gap: 4px; overflow-x: auto; padding-bottom: 8px;">
+                  <!-- Dynamically populated grid blocks -->
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px; font-size: 12px;">
+                  <div class="perfect-day-streak-badge" id="perfect-day-streak-badge" style="font-weight: 600; color: var(--warning);">
+                    🏆 Current Perfect Day Streak: 0 days
+                  </div>
+                  <div style="display: flex; gap: 8px; color: var(--text-secondary); font-size: 11px;">
+                    <span>Less</span>
+                    <span style="display: inline-block; width: 10px; height: 10px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 2px;"></span>
+                    <span style="display: inline-block; width: 10px; height: 10px; background: rgba(124,58,237,0.3); border-radius: 2px;"></span>
+                    <span style="display: inline-block; width: 10px; height: 10px; background: rgba(124,58,237,0.6); border-radius: 2px;"></span>
+                    <span style="display: inline-block; width: 10px; height: 10px; background: #7c3aed; border-radius: 2px;"></span>
+                    <span>More</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Advanced Metrics & Patterns Card -->
+            <div class="analytics-card">
+              <h3 class="analytics-card-title">🔍 Work Patterns & Efficiency</h3>
+              <div class="advanced-metrics-list" id="advanced-metrics-list" style="padding: var(--space-md); display: flex; flex-direction: column; gap: var(--space-sm);">
+                <!-- Dynamically populated -->
+              </div>
+            </div>
+
+            <!-- AI Report Card -->
+            <div class="analytics-card">
+              <div class="ai-card-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--glass-border); padding: var(--space-md) var(--space-lg);">
+                <h3 class="analytics-card-title" style="margin:0">🎓 AI Weekly Report Card</h3>
+                <button class="btn btn-primary btn-sm" id="btn-generate-report-card" onclick="generateWeeklyReportCard()">
+                  Generate
+                </button>
+              </div>
+              <div class="ai-report-card-content" id="ai-report-card-content" style="padding: var(--space-md);">
+                <p class="text-muted" style="font-size:12px; margin:0;">Generate a personalized weekly productivity report card with letter grades, metrics, and coaching from Gemini.</p>
+              </div>
+            </div>
+
+            <!-- AI Productivity Insights Card -->
+            <div class="analytics-card card-span-2 ai-insights-card">
+              <div class="ai-card-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--glass-border); padding: var(--space-md) var(--space-lg);">
+                <h3 class="analytics-card-title" style="margin:0">🧠 AI Productivity Insights</h3>
+                <button class="btn btn-primary btn-sm" id="btn-generate-insights" onclick="generateProductivityInsights()">
+                  Generate Insights
+                </button>
+              </div>
+              <div class="ai-insights-content" id="ai-insights-content" style="padding: var(--space-md);">
+                <p class="text-muted" style="font-size:12px; margin:0;">Generate AI insights to analyze your task estimates, completion times, and category-level efficiency.</p>
+              </div>
+            </div>
+
+            <!-- Achievements Badges -->
+            <div class="analytics-card card-span-2">
+              <h3 class="analytics-card-title">🏆 Unlocked Achievements</h3>
+              <div style="padding: var(--space-md);">
+                <div class="badges-grid" id="badges-grid">
+                  <!-- Dynamically populated badge cards -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── VIEW: CALENDAR ─── -->
+      <section class="view" id="view-calendar">
+        <div class="calendar-layout" style="display:flex; flex-direction:column; gap:var(--space-md); flex:1; height:100%;">
+          <div class="calendar-toolbar" style="display:flex; justify-content:space-between; align-items:center;">
+            <div class="calendar-nav" style="display:flex; align-items:center; gap:var(--space-sm);">
+              <button class="btn btn-ghost btn-icon" onclick="calendarPrevMonth()">‹</button>
+              <h2 class="section-title" id="calendar-month-label" style="min-width:180px; text-align:center; margin:0;">June 2026</h2>
+              <button class="btn btn-ghost btn-icon" onclick="calendarNextMonth()">›</button>
+            </div>
+            <button class="btn btn-primary" onclick="openManualEventModal()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add Event
+            </button>
+          </div>
+          
+          <div class="calendar-grid-container" style="flex:1; display:flex; flex-direction:column; background:var(--glass-bg); border:1px solid var(--glass-border); border-radius:var(--radius-lg); padding:var(--space-md); overflow:hidden;">
+            <!-- Weekday headers -->
+            <div class="calendar-weekdays" style="display:grid; grid-template-columns:repeat(7, 1fr); text-align:center; font-weight:600; font-size:12px; color:var(--text-muted); padding-bottom:var(--space-xs); border-bottom:1px solid var(--glass-border);">
+              <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+            </div>
+            <!-- Days grid -->
+            <div class="calendar-days-grid" id="calendar-days-grid" style="flex:1; display:grid; grid-template-columns:repeat(7, 1fr); grid-template-rows:repeat(6, 1fr); gap:4px; margin-top:var(--space-xs);">
+              <!-- populated by renderMonthlyCalendar() -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── VIEW: SETTINGS ─── -->
+      <section class="view" id="view-settings">
+        <div class="settings-layout">
+          <div class="settings-card">
+            <h2 class="settings-section-title">🤖 AI Configuration</h2>
+            <p class="settings-description">Configure Gemini AI to unlock the full power of your productivity companion.</p>
+            <div class="form-group">
+              <label class="form-label" for="api-key-input">Gemini API Key</label>
+              <div class="api-key-wrapper">
+                <input type="password" id="api-key-input" class="form-input" placeholder="AIza..." value="" />
+                <button class="btn btn-ghost btn-sm" onclick="toggleApiKeyVisibility()">Show</button>
+              </div>
+              <span class="form-hint">Get your free API key at <a href="https://aistudio.google.com" target="_blank" class="link">aistudio.google.com</a></span>
+            </div>
+            <div class="form-group" style="margin-top: 15px;">
+              <label class="form-label" for="gemini-model-select">Gemini Model</label>
+              <select id="gemini-model-select" class="form-input form-select" onchange="saveModelSelection()">
+                <option value="auto">Auto-Fallback (Recommended)</option>
+                <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+                <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash Lite</option>
+                <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
+                <option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
+                <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite</option>
+                <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+              </select>
+              <span class="form-hint">Auto-Fallback automatically handles quota failures by cycling through other working models.</span>
+            </div>
+            <button class="btn btn-primary" onclick="saveApiKey()">Save API Key</button>
+          </div>
+
+          <div class="settings-card">
+            <h2 class="settings-section-title">👤 User Profile</h2>
+            <div class="form-group">
+              <label class="form-label" for="user-email-input">Your Email (Account)</label>
+              <input type="text" id="user-email-input" class="form-input" disabled style="opacity: 0.7; cursor: not-allowed;" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="user-name-input">Your Name</label>
+              <input type="text" id="user-name-input" class="form-input" placeholder="Enter your name" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="work-start-input">Work Start Time</label>
+              <input type="time" id="work-start-input" class="form-input" value="09:00" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="work-end-input">Work End Time</label>
+              <input type="time" id="work-end-input" class="form-input" value="18:00" />
+            </div>
+            <button class="btn btn-primary" onclick="saveUserProfile()">Save Profile</button>
+          </div>
+
+          <div class="settings-card">
+            <h2 class="settings-section-title">🔔 Notifications</h2>
+            <div class="toggle-row">
+              <div class="toggle-info">
+                <span class="toggle-label">Crisis Mode Alerts</span>
+                <span class="toggle-desc">Alert when deadline is within 2 hours</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="toggle-crisis" checked onchange="saveNotificationSettings()"/>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div class="toggle-row">
+              <div class="toggle-info">
+                <span class="toggle-label">Voice Responses</span>
+                <span class="toggle-desc">AI responds with synthesized voice</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="toggle-voice-response" onchange="saveNotificationSettings()"/>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div class="toggle-row">
+              <div class="toggle-info">
+                <span class="toggle-label">Auto Re-prioritize</span>
+                <span class="toggle-desc">AI silently reorders tasks every 30 min</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="toggle-auto-priority" checked onchange="saveNotificationSettings()"/>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+
+
+
+          <div class="settings-card">
+            <h2 class="settings-section-title">🎁 Judge Walkthrough & Demo</h2>
+            <p class="settings-description">Load a pre-packaged student scenario with a critical deadline crisis and active habit streaks to inspect LMLS features.</p>
+            <div class="settings-actions" style="margin-top: var(--space-sm);">
+              <button class="btn btn-primary btn-sm" onclick="loadJudgeDemoStory()">🎁 Load Demo Story</button>
+              <button class="btn btn-ghost btn-sm" onclick="exportData()">📤 Export Data</button>
+              <button class="btn btn-danger btn-sm" onclick="clearAllData()">🗑️ Clear All Data</button>
+              <button class="btn btn-ghost btn-sm" onclick="signOut()" style="border-color:rgba(239,68,68,0.3);color:#f87171;">🚪 Sign Out</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main><!-- /main-content -->
+  </div><!-- /app -->
+
+  <!-- ═══════════════ ADD TASK MODAL ═══════════════ -->
+  <div class="modal-backdrop hidden" id="modal-backdrop" onclick="closeModal()"></div>
+  <div class="modal hidden" id="modal-task" role="dialog" aria-modal="true" aria-labelledby="modal-task-title">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-task-title">Add New Task</h2>
+      <button class="btn btn-ghost btn-icon modal-close" onclick="closeModal()" aria-label="Close">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="task-edit-id" />
+      <div class="form-row">
+        <div class="form-group form-group--full">
+          <label class="form-label" for="task-title-input">Task Title <span class="required">*</span></label>
+          <input type="text" id="task-title-input" class="form-input" placeholder="What needs to be done?" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group form-group--full">
+          <label class="form-label" for="task-description-input">Description</label>
+          <textarea id="task-description-input" class="form-input form-textarea" placeholder="Add more details..." rows="2"></textarea>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="task-deadline-input">Deadline <span class="required">*</span></label>
+          <input type="datetime-local" id="task-deadline-input" class="form-input" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="task-estimate-input">Estimated Time</label>
+          <div class="estimate-input-wrapper">
+            <input type="number" id="task-estimate-input" class="form-input" placeholder="60" min="1" />
+            <span class="estimate-unit">min</span>
+          </div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="task-priority-input">Priority</label>
+          <select id="task-priority-input" class="form-input form-select">
+            <option value="low">🟢 Low</option>
+            <option value="medium">🟡 Medium</option>
+            <option value="high">🟠 High</option>
+            <option value="critical">🔴 Critical</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="task-category-input">Category</label>
+          <select id="task-category-input" class="form-input form-select">
+            <option value="work">💼 Work</option>
+            <option value="personal">🏠 Personal</option>
+            <option value="health">💖 Health</option>
+            <option value="finance">💰 Finance</option>
+            <option value="education">📚 Education</option>
+            <option value="other">📌 Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="task-tags-input">Tags <span class="form-hint-inline">(comma separated)</span></label>
+          <input type="text" id="task-tags-input" class="form-input" placeholder="urgent, project-alpha, review" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="task-depends-input">Depends On</label>
+          <select id="task-depends-input" class="form-input form-select">
+            <option value="">None</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group form-group--full">
+          <label class="form-label" for="task-notes-input">Notes</label>
+          <textarea id="task-notes-input" class="form-input form-textarea" placeholder="Additional notes..." rows="2"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="save-task-btn" onclick="saveTask()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+        Save Task
+      </button>
+    </div>
+  </div>
+
+  <!-- ═══════════════ ADD HEADING MODAL ═══════════════ -->
+  <div class="modal hidden" id="modal-heading" role="dialog" aria-modal="true" aria-labelledby="modal-heading-title">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-heading-title">Add New Heading</h2>
+      <button class="btn btn-ghost btn-icon modal-close" onclick="closeHeadingModal()" aria-label="Close">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="heading-edit-id" />
+      <div class="form-group">
+        <label class="form-label" for="heading-title-input">Heading Title <span class="required">*</span></label>
+        <input type="text" id="heading-title-input" class="form-input" placeholder="e.g. Work Tasks, Personal Tasks..." maxlength="80" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeHeadingModal()">Cancel</button>
+      <button class="btn btn-primary" id="save-heading-btn" onclick="saveHeading()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+        Save Heading
+      </button>
+    </div>
+  </div>
+
+  <!-- ═══════════════ ADD CATEGORY MODAL ═══════════════ -->
+  <div class="modal hidden" id="modal-category" role="dialog" aria-modal="true" aria-labelledby="modal-category-title">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-category-title">Add New Category</h2>
+      <button class="btn btn-ghost btn-icon modal-close" onclick="closeCategoryModal()" aria-label="Close">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label" for="category-name-input">Category Name <span class="required">*</span></label>
+        <input type="text" id="category-name-input" class="form-input" placeholder="e.g. Shopping, Hobbies, Projects..." maxlength="30" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Category Icon (Emoji)</label>
+        <div class="emoji-picker" id="category-emoji-picker">
+          <span class="emoji-option selected" data-emoji="🏷️">🏷️</span>
+          <span class="emoji-option" data-emoji="🏃">🏃</span>
+          <span class="emoji-option" data-emoji="🎮">🎮</span>
+          <span class="emoji-option" data-emoji="✈️">✈️</span>
+          <span class="emoji-option" data-emoji="🍳">🍳</span>
+          <span class="emoji-option" data-emoji="🎨">🎨</span>
+          <span class="emoji-option" data-emoji="🌱">🌱</span>
+          <span class="emoji-option" data-emoji="💡">💡</span>
+          <span class="emoji-option" data-emoji="🎁">🎁</span>
+          <span class="emoji-option" data-emoji="🧹">🧹</span>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeCategoryModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCategory()">Save Category</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════ ADD HABIT MODAL ═══════════════ -->
+  <div class="modal hidden" id="modal-habit" role="dialog" aria-modal="true" aria-labelledby="modal-habit-title">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-habit-title">Add New Habit</h2>
+      <button class="btn btn-ghost btn-icon modal-close" onclick="closeHabitModal()" aria-label="Close">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label" for="habit-name-input">Habit Name <span class="required">*</span></label>
+        <input type="text" id="habit-name-input" class="form-input" placeholder="e.g. Morning Exercise" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Habit Icon</label>
+        <div class="emoji-picker" id="habit-emoji-picker">
+          <span class="emoji-option selected" data-emoji="🏃">🏃</span>
+          <span class="emoji-option" data-emoji="📚">📚</span>
+          <span class="emoji-option" data-emoji="💧">💧</span>
+          <span class="emoji-option" data-emoji="🧘">🧘</span>
+          <span class="emoji-option" data-emoji="💪">💪</span>
+          <span class="emoji-option" data-emoji="🥗">🥗</span>
+          <span class="emoji-option" data-emoji="😴">😴</span>
+          <span class="emoji-option" data-emoji="✍️">✍️</span>
+          <span class="emoji-option" data-emoji="🎯">🎯</span>
+          <span class="emoji-option" data-emoji="🧹">🧹</span>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="habit-frequency-input">Frequency</label>
+        <select id="habit-frequency-input" class="form-input form-select">
+          <option value="daily">Daily</option>
+          <option value="weekdays">Weekdays</option>
+          <option value="weekends">Weekends</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="habit-goal-input">Target (per day)</label>
+        <input type="number" id="habit-goal-input" class="form-input" value="1" min="1" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeHabitModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveHabit()">Save Habit</button>
+    </div>
+  </div>
+
+  <!-- Focus Task Picker Modal -->
+  <div class="modal hidden" id="modal-focus-pick" role="dialog" aria-modal="true" aria-labelledby="focus-pick-title">
+    <div class="modal-header">
+      <h2 class="modal-title" id="focus-pick-title">Pick Focus Task</h2>
+      <button class="btn btn-ghost btn-icon modal-close" onclick="closeFocusPicker()" aria-label="Close">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="focus-task-list" id="focus-task-list"></div>
+    </div>
+  </div>
+
+  <!-- AI Response Modal -->
+  <div class="modal hidden" id="modal-ai-response" role="dialog" aria-modal="true" aria-labelledby="ai-response-title">
+    <div class="modal-header">
+      <h2 class="modal-title" id="ai-response-title">🤖 AI Assistant</h2>
+      <button class="btn btn-ghost btn-icon modal-close" onclick="closeAIResponseModal()" aria-label="Close">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" style="padding-top: var(--space-xs);">
+      <div id="ai-response-content" class="ai-message" style="line-height: 1.6; font-size: 14px; max-height: 450px; overflow-y: auto; color: var(--text-primary);"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="closeAIResponseModal()">Close</button>
+    </div>
+  </div>
+
+  <!-- Morning Daily Briefing Modal -->
+  <div class="modal hidden" id="modal-briefing" role="dialog" aria-modal="true" aria-labelledby="briefing-title">
+    <div class="modal-header">
+      <h2 class="modal-title" id="briefing-title">☀️ Morning Daily Briefing</h2>
+    </div>
+    <div class="modal-body" style="display:flex; flex-direction:column; align-items:center; gap: var(--space-md); padding-top: var(--space-md);">
+      <div class="briefing-avatar-wrapper">
+        <div class="briefing-avatar" id="briefing-avatar">
+          <div class="avatar-wave wave-1"></div>
+          <div class="avatar-wave wave-2"></div>
+          <div class="avatar-wave wave-3"></div>
+          <span style="font-size: 32px; z-index: 2;">🧠</span>
+        </div>
+      </div>
+      <div id="briefing-content" class="ai-message" style="line-height: 1.6; font-size: 13px; max-height: 250px; width:100%; overflow-y: auto; color: var(--text-primary); text-align: left; padding: var(--space-md); background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border); border-radius: var(--radius-md);">
+        Preparing your daily focus plan...
+      </div>
+    </div>
+    <div class="modal-footer" style="width: 100%; display: flex; justify-content: center;">
+      <button class="btn btn-primary btn-lg" onclick="closeBriefingModal()">Let's Go! 🚀</button>
+    </div>
+  </div>
+
+  <!-- Smart Snooze Modal -->
+  <div class="modal hidden" id="modal-snooze" role="dialog" aria-modal="true" aria-labelledby="snooze-title">
+    <div class="modal-header">
+      <h2 class="modal-title" id="snooze-title">🕒 Smart Snooze</h2>
+      <button class="btn btn-ghost btn-icon modal-close" onclick="closeSnoozeModal()" aria-label="Close">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="snooze-task-id" />
+      <div class="form-group">
+        <label class="form-label">Snooze Duration</label>
+        <div class="snooze-shortcuts">
+          <button class="btn btn-ghost btn-sm" onclick="selectSnoozeDuration(30)">+30 Min</button>
+          <button class="btn btn-ghost btn-sm" onclick="selectSnoozeDuration(120)">+2 Hours</button>
+          <button class="btn btn-ghost btn-sm" onclick="selectSnoozeDuration(1440)">+1 Day</button>
+        </div>
+      </div>
+      <div class="form-group" style="margin-top: var(--space-md);">
+        <label class="form-label" for="snooze-reason">Why are you snoozing this task? <span class="required">*</span></label>
+        <textarea id="snooze-reason" class="form-input form-textarea" placeholder="e.g. Waiting on someone, need more data, tired..." rows="2"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Quick Reasons</label>
+        <div class="snooze-tags" id="snooze-tags">
+          <span class="snooze-tag" onclick="setSnoozeReason('Waiting on feedback')">Waiting on feedback</span>
+          <span class="snooze-tag" onclick="setSnoozeReason('Need more information')">Need more info</span>
+          <span class="snooze-tag" onclick="setSnoozeReason('Burned out / Tired')">Burned out</span>
+          <span class="snooze-tag" onclick="setSnoozeReason('Low priority right now')">Low priority</span>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeSnoozeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitSnooze()">Snooze Task</button>
+    </div>
+  </div>
+
+  <!-- Onboarding Wizard Modal -->
+  <div class="modal-backdrop hidden" id="onboarding-backdrop" onclick="closeModal()"></div>
+  <div class="modal hidden" id="modal-onboarding" role="dialog" aria-modal="true" aria-labelledby="onboarding-title" data-step="1">
+    <div class="modal-header">
+      <h2 class="modal-title" id="onboarding-title">Welcome to LMLS! 🚀</h2>
+    </div>
+    <div class="modal-body">
+      <!-- Step Progress Dots -->
+      <div class="onboarding-steps-indicator">
+        <span class="step-dot active" data-step="1"></span>
+        <span class="step-dot" data-step="2"></span>
+        <span class="step-dot" data-step="3"></span>
+      </div>
+
+      <!-- Step 1: Name -->
+      <div class="onboarding-step" id="onboarding-step-1">
+        <h3>First, what should we call you?</h3>
+        <p class="step-desc">Your AI productivity companion will address you by this name.</p>
+        <div class="form-group" style="margin-top: var(--space-md);">
+          <label class="form-label" for="onboarding-name-input">Your Name</label>
+          <input type="text" id="onboarding-name-input" class="form-input" placeholder="e.g. Alex" />
+        </div>
+      </div>
+
+      <!-- Step 2: Work Hours -->
+      <div class="onboarding-step hidden" id="onboarding-step-2">
+        <h3>What are your typical work hours?</h3>
+        <p class="step-desc">We use these hours to schedule your tasks and detect workload issues.</p>
+        <div class="form-row" style="margin-top: var(--space-md);">
+          <div class="form-group">
+            <label class="form-label" for="onboarding-start-input">Start Time</label>
+            <input type="time" id="onboarding-start-input" class="form-input" value="09:00" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="onboarding-end-input">End Time</label>
+            <input type="time" id="onboarding-end-input" class="form-input" value="18:00" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3: Get Started -->
+      <div class="onboarding-step hidden" id="onboarding-step-3">
+        <h3>Let's seed your productivity dashboard</h3>
+        <p class="step-desc">Choose whether to load sample tasks & habits, or start fresh.</p>
+        <div class="onboarding-options" style="margin-top: var(--space-md); display:flex; flex-direction:column; gap: var(--space-sm);">
+          <button class="btn btn-primary btn-lg" onclick="completeOnboarding(true)">
+            🌱 Load Demo Data & Start
+          </button>
+          <button class="btn btn-ghost" onclick="completeOnboarding(false)">
+            🚀 Start Fresh (Empty Dashboard)
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer" id="onboarding-footer">
+      <button class="btn btn-ghost hidden" id="btn-onboarding-back" onclick="onboardingPrevStep()">Back</button>
+      <button class="btn btn-primary" id="btn-onboarding-next" onclick="onboardingNextStep()">Next</button>
+    </div>
+  </div>
+
+  <!-- Mobile Navigation Bar -->
+  <nav id="mobile-nav" aria-label="Mobile Navigation">
+    <a href="#" class="mobile-nav-item active" id="mobile-nav-dashboard" onclick="navigateTo('dashboard')" aria-label="Dashboard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      <span>Home</span>
+      <span class="nav-badge" id="mobile-badge-dashboard" style="display: none;"></span>
+    </a>
+    <a href="#" class="mobile-nav-item" id="mobile-nav-tasks" onclick="navigateTo('tasks')" aria-label="Tasks">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+      <span>Tasks</span>
+      <span class="nav-badge" id="mobile-badge-tasks" style="display: none;"></span>
+    </a>
+    <a href="#" class="mobile-nav-item" id="mobile-nav-ai" onclick="navigateTo('ai')" aria-label="AI Agent">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 017 7 7 7 0 01-7 7 7 7 0 01-7-7 7 7 0 017-7z"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      <span>AI Agent</span>
+    </a>
+    <a href="#" class="mobile-nav-item" id="mobile-nav-habits" onclick="navigateTo('habits')" aria-label="Habits">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
+      <span>Habits</span>
+      <span class="nav-badge" id="mobile-badge-habits" style="display: none;"></span>
+    </a>
+    <a href="#" class="mobile-nav-item" id="mobile-nav-focus" onclick="navigateTo('focus')" aria-label="Focus Mode">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      <span>Focus</span>
+    </a>
+  </nav>
+
+  <!-- ═══════════════ COMMAND PALETTE (Ctrl+K) ═══════════════ -->
+  <div id="cmd-palette-backdrop" class="cmd-palette-backdrop hidden" role="dialog" aria-label="Command palette" aria-modal="true">
+    <div class="cmd-palette" id="cmd-palette">
+      <div class="cmd-input-row">
+        <span class="cmd-icon">⌘</span>
+        <input class="cmd-input" id="cmd-input" type="text" placeholder="Search tasks or ask AI anything..." autocomplete="off" />
+        <span class="cmd-shortcut-hint">ESC</span>
+      </div>
+      <div class="cmd-results" id="cmd-results">
+        <div class="cmd-section-label">Quick Actions</div>
+        <div class="cmd-item" onclick="openAddTaskModal(); closeCmdPalette();" id="cmd-add-task">
+          <span class="cmd-item-icon">➕</span>
+          <span class="cmd-item-text">Add new task</span>
+          <span class="cmd-item-hint">Ctrl+N</span>
+        </div>
+        <div class="cmd-item" onclick="navigateTo('focus'); closeCmdPalette();" id="cmd-go-focus">
+          <span class="cmd-item-icon">⏱️</span>
+          <span class="cmd-item-text">Start Focus Mode</span>
+          <span class="cmd-item-hint">Ctrl+F</span>
+        </div>
+        <div class="cmd-item" onclick="navigateTo('ai'); closeCmdPalette();" id="cmd-go-ai">
+          <span class="cmd-item-icon">🤖</span>
+          <span class="cmd-item-text">Open AI Agent</span>
+          <span class="cmd-item-hint"></span>
+        </div>
+        <div class="cmd-item" onclick="navigateTo('analytics'); closeCmdPalette();" id="cmd-go-analytics">
+          <span class="cmd-item-icon">📊</span>
+          <span class="cmd-item-text">View Analytics</span>
+          <span class="cmd-item-hint"></span>
+        </div>
+        <div class="cmd-item" onclick="navigateTo('habits'); closeCmdPalette();" id="cmd-go-habits">
+          <span class="cmd-item-icon">🔥</span>
+          <span class="cmd-item-text">Check Habits</span>
+          <span class="cmd-item-hint"></span>
+        </div>
+        <div class="cmd-section-label" id="cmd-task-section" style="display:none">Matching Tasks</div>
+        <div id="cmd-task-results"></div>
+        <div class="cmd-section-label" id="cmd-ai-section" style="display:none">Ask AI</div>
+        <div id="cmd-ai-result"></div>
+      </div>
+      <div class="cmd-footer">
+        <span><span class="cmd-key">↑↓</span> navigate</span>
+        <span><span class="cmd-key">↵</span> select</span>
+        <span><span class="cmd-key">ESC</span> close</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ FOCUS HUD OVERLAY ═══════════════ -->
+  <div id="focus-hud-overlay" class="focus-hud-overlay hidden" role="dialog" aria-label="Focus mode overlay">
+    <div class="focus-hud-pulse-ring"></div>
+    <div class="focus-hud-pulse-ring"></div>
+    <div class="focus-hud-pulse-ring"></div>
+    <div class="focus-hud-task-name" id="focus-hud-task-name">Focusing...</div>
+    <div class="focus-hud-timer" id="focus-hud-timer">25:00</div>
+    <div class="focus-hud-quote" id="focus-hud-quote">"The secret of getting ahead is getting started."</div>
+    <div class="focus-hud-actions">
+      <button class="btn btn-primary" onclick="closeFocusHUD()" id="btn-focus-hud-pause">⏸ Pause</button>
+      <button class="focus-hud-exit-btn" onclick="exitFocusHUD()">✕ Break the Flow</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════ DAY REVIEW MODAL ═══════════════ -->
+  <div id="modal-day-review" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="day-review-title">
+    <div class="modal-container day-review-modal">
+      <div class="day-review-title">🌙 Day Complete!</div>
+      <p style="color: var(--text-muted); font-size:14px;">Here's your summary for today</p>
+      <div class="day-review-stats" id="day-review-stats"></div>
+      <p style="font-size:13px; color: var(--text-secondary);">How was your day?</p>
+      <div class="star-rating" id="star-rating">
+        <span class="star" data-rating="1">⭐</span>
+        <span class="star" data-rating="2">⭐</span>
+        <span class="star" data-rating="3">⭐</span>
+        <span class="star" data-rating="4">⭐</span>
+        <span class="star" data-rating="5">⭐</span>
+      </div>
+      <div id="day-review-ai-debrief" style="font-size:13px; color:var(--text-secondary); margin-bottom:var(--space-md); min-height:40px;"></div>
+      <button class="btn btn-primary btn-full" onclick="closeDayReview()">✨ See you tomorrow!</button>
+    </div>
+  </div>
+
+
+  <!-- 📅 MANUAL EVENT MODAL -->
+  <div id="modal-manual-event" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="manual-event-title" onclick="if(event.target === this) closeManualEventModal()">
+    <div class="modal-container" style="max-width:480px;">
+      <div class="modal-header">
+        <h2 class="modal-title" id="manual-event-title">📅 Add Calendar Event</h2>
+        <button class="modal-close-btn" onclick="closeManualEventModal()" aria-label="Close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="manual-event-id" />
+        <div class="form-group">
+          <label class="form-label" for="manual-event-title-input">Event Title <span>*</span></label>
+          <input type="text" id="manual-event-title-input" class="form-input" placeholder="e.g. Team meeting, Doctor appointment..." maxlength="80" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="manual-event-date-input">Date <span>*</span></label>
+          <input type="date" id="manual-event-date-input" class="form-input" />
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-md);">
+          <div class="form-group">
+            <label class="form-label" for="manual-event-start-input">Start Time <span>*</span></label>
+            <input type="time" id="manual-event-start-input" class="form-input" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="manual-event-end-input">End Time <span>*</span></label>
+            <input type="time" id="manual-event-end-input" class="form-input" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="manual-event-notes-input">Notes (optional)</label>
+          <textarea id="manual-event-notes-input" class="form-input" rows="2" placeholder="Any extra details..."></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Color</label>
+          <div id="manual-event-color-picker" style="display:flex; gap:8px; flex-wrap:wrap; margin-top:4px;">
+            <span class="color-swatch active" data-color="#7c3aed" style="background:#7c3aed;" onclick="selectEventColor('#7c3aed', this)"></span>
+            <span class="color-swatch" data-color="#06b6d4" style="background:#06b6d4;" onclick="selectEventColor('#06b6d4', this)"></span>
+            <span class="color-swatch" data-color="#10b981" style="background:#10b981;" onclick="selectEventColor('#10b981', this)"></span>
+            <span class="color-swatch" data-color="#f59e0b" style="background:#f59e0b;" onclick="selectEventColor('#f59e0b', this)"></span>
+            <span class="color-swatch" data-color="#ef4444" style="background:#ef4444;" onclick="selectEventColor('#ef4444', this)"></span>
+            <span class="color-swatch" data-color="#ec4899" style="background:#ec4899;" onclick="selectEventColor('#ec4899', this)"></span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="manual-event-delete-btn" onclick="deleteManualEvent()" style="display:none; color:var(--danger);">🗑 Delete</button>
+        <div style="display:flex; gap:var(--space-sm); margin-left:auto;">
+          <button class="btn btn-ghost" onclick="closeManualEventModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="saveManualEvent()" id="btn-save-manual-event">💾 Save Event</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="scripts/animations.js"></script>
+  <script src="scripts/tasks.js"></script>
+  <script src="scripts/gemini.js"></script>
+  <script src="scripts/voice.js"></script>
+  <script src="scripts/scheduler.js"></script>
+  <script src="scripts/calendar.js"></script>
+  <script src="scripts/habits.js"></script>
+  <script src="scripts/analytics.js"></script>
+  <script src="scripts/gamification.js"></script>
+  <script src="scripts/agent.js"></script>
+  <script src="scripts/app.js"></script>
+</body>
+</html>

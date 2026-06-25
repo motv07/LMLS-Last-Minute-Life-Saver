@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Last-Minute Life Saver — Sign in to your AI-powered productivity companion." />
+  <title>LMLS — Sign In | Last-Minute Life Saver</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- LocalStorage User Isolation Wrapper -->
+  <script>
+    (function() {
+      const originalGet = localStorage.getItem;
+      const originalSet = localStorage.setItem;
+      const originalRemove = localStorage.removeItem;
+
+      const EXCLUDED_KEYS = ['lmls_current_user', 'lmls_users', 'lmls_auth_completed'];
+
+      function getIsolatedKey(key) {
+        if (!key || typeof key !== 'string') return key;
+        if (!key.startsWith('lmls_')) return key;
+        if (EXCLUDED_KEYS.includes(key)) return key;
+        
+        const currentUser = originalGet.call(localStorage, 'lmls_current_user') || 'guest';
+        const suffix = `_${currentUser.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+        
+        if (key.endsWith(suffix)) return key;
+        return `${key}${suffix}`;
+      }
+
+      localStorage.getItem = function(key) {
+        return originalGet.call(localStorage, getIsolatedKey(key));
+      };
+
+      localStorage.setItem = function(key, value) {
+        originalSet.call(localStorage, getIsolatedKey(key), value);
+      };
+
+      localStorage.removeItem = function(key) {
+        originalRemove.call(localStorage, getIsolatedKey(key));
+      };
+
+      localStorage.clear = function() {
+        const currentUser = originalGet.call(localStorage, 'lmls_current_user') || 'guest';
+        const suffix = `_${currentUser.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+        const keysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.endsWith(suffix)) {
+            keysToRemove.push(key);
+          }
+        }
+        keysToRemove.forEach(k => originalRemove.call(localStorage, k));
+      };
+    })();
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-base:       #070714;
+      --bg-elevated:   #12123a;
+      --primary:       #7c3aed;
+      --primary-light: #a78bfa;
+      --cyan:          #06b6d4;
+      --success:       #10b981;
+      --danger:        #ef4444;
+      --warning:       #f59e0b;
+      --text-primary:  #f1f5f9;
+      --text-muted:    #64748b;
+      --glass-border:  rgba(255,255,255,0.1);
+      --radius-lg:     16px;
+      --radius-xl:     24px;
+      --radius-full:   9999px;
+      --font-sans:     'Inter', sans-serif;
+      --font-mono:     'JetBrains Mono', monospace;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      overflow-x: hidden;
+      overflow-y: auto;
+    }
+
+    /* ── Aurora Background ── */
+    .aurora-bg {
+      position: fixed; inset: 0;
+      pointer-events: none; z-index: 0; overflow: hidden;
+    }
+    .aurora-blob {
+      position: absolute; border-radius: 50%;
+      filter: blur(90px); opacity: 0.15;
+      animation: aurora-drift var(--dur, 20s) ease-in-out infinite alternate;
+    }
+    .ab1 { width:700px; height:700px; background:radial-gradient(circle,#7c3aed 0%,transparent 70%); top:-20%; left:5%; --dur:22s; }
+    .ab2 { width:500px; height:500px; background:radial-gradient(circle,#06b6d4 0%,transparent 70%); bottom:-15%; right:3%; --dur:18s; animation-direction:alternate-reverse; }
+    .ab3 { width:400px; height:400px; background:radial-gradient(circle,#ec4899 0%,transparent 70%); top:45%; left:55%; --dur:26s; }
+    @keyframes aurora-drift {
+      0%   { transform: translate(0,0) scale(1); }
+      33%  { transform: translate(40px,-30px) scale(1.06); }
+      66%  { transform: translate(-25px,50px) scale(0.96); }
+      100% { transform: translate(30px,20px) scale(1.04); }
+    }
+
+    /* ── Particle Grid ── */
+    .grid-overlay {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background-image:
+        linear-gradient(rgba(124,58,237,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(124,58,237,0.03) 1px, transparent 1px);
+      background-size: 60px 60px;
+    }
+
+    /* ── Main Layout ── */
+    .auth-layout {
+      position: relative; z-index: 1;
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px;
+    }
+
+    .auth-card {
+      width: 100%; max-width: 480px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: var(--radius-xl);
+      backdrop-filter: blur(32px) saturate(180%);
+      -webkit-backdrop-filter: blur(32px) saturate(180%);
+      box-shadow: 0 32px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04) inset;
+      padding: 48px 40px;
+      animation: card-enter 0.5s cubic-bezier(0.34,1.56,0.64,1) both;
+      position: relative; overflow: hidden;
+    }
+    .auth-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(124,58,237,0.7), rgba(6,182,212,0.5), transparent);
+    }
+    @keyframes card-enter {
+      from { opacity: 0; transform: scale(0.88) translateY(24px); }
+      to   { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    /* ── Logo ── */
+    .auth-logo {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 32px; justify-content: center;
+    }
+    .auth-logo-icon {
+      width: 52px; height: 52px;
+      background: linear-gradient(135deg, #7c3aed, #06b6d4);
+      border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 8px 24px rgba(124,58,237,0.4);
+      animation: logo-pulse 3s ease-in-out infinite;
+    }
+    @keyframes logo-pulse {
+      0%,100% { box-shadow: 0 8px 24px rgba(124,58,237,0.4); }
+      50%      { box-shadow: 0 8px 32px rgba(124,58,237,0.7), 0 0 48px rgba(6,182,212,0.2); }
+    }
+    .auth-logo-text { line-height: 1.1; }
+    .auth-logo-name { font-size: 28px; font-weight: 900; letter-spacing: -0.5px;
+      background: linear-gradient(135deg,#c4b5fd,#22d3ee); -webkit-background-clip:text;
+      -webkit-text-fill-color:transparent; background-clip:text; display:block; }
+    .auth-logo-tagline { font-size: 12px; color: var(--text-muted); font-weight: 500; letter-spacing: 0.5px; display:block; }
+
+    /* ── Sections ── */
+    .auth-section { display: none; animation: section-in 0.3s ease both; }
+    .auth-section.active { display: block; }
+    @keyframes section-in {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .step-heading {
+      font-size: 22px; font-weight: 800; margin-bottom: 6px; letter-spacing: -0.3px;
+      text-align: center;
+    }
+    .step-sub {
+      font-size: 14px; color: var(--text-muted); margin-bottom: 28px; line-height: 1.5;
+      text-align: center;
+    }
+
+    /* ── Form Controls ── */
+    .form-group { margin-bottom: 18px; }
+    .form-label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--text-primary); }
+    .form-label span { color: #a78bfa; }
+    .form-input {
+      width: 100%;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px;
+      padding: 12px 16px;
+      color: var(--text-primary);
+      font-size: 15px;
+      font-family: var(--font-sans);
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+    }
+    .form-input:focus {
+      border-color: var(--primary);
+      background: rgba(124,58,237,0.08);
+      box-shadow: 0 0 0 3px rgba(124,58,237,0.2);
+    }
+    .form-input::placeholder { color: var(--text-muted); }
+    .form-hint { font-size: 11px; color: var(--text-muted); margin-top: 5px; display: block; }
+    .form-hint a { color: var(--primary-light); text-decoration: none; }
+    .form-hint a:hover { text-decoration: underline; }
+
+    /* ── Work Style Options ── */
+    .work-style-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+    .work-style-option {
+      padding: 14px 12px; border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.03);
+      cursor: pointer; text-align: center;
+      transition: all 0.2s; user-select: none;
+    }
+    .work-style-option:hover { background: rgba(124,58,237,0.1); border-color: rgba(124,58,237,0.3); }
+    .work-style-option.selected { border-color: var(--primary); background: rgba(124,58,237,0.15); box-shadow: 0 0 20px rgba(124,58,237,0.15); }
+    .work-style-icon { font-size: 24px; display: block; margin-bottom: 6px; }
+    .work-style-label { font-size: 13px; font-weight: 600; }
+    .work-style-desc { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      gap: 8px; padding: 12px 24px;
+      border-radius: var(--radius-full);
+      font-size: 14px; font-weight: 700;
+      cursor: pointer; border: none; outline: none;
+      transition: all 0.2s; font-family: var(--font-sans);
+      text-decoration: none;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #7c3aed, #06b6d4);
+      color: white;
+      box-shadow: 0 4px 20px rgba(124,58,237,0.4);
+    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(124,58,237,0.5); }
+    .btn-primary:active { transform: translateY(0); }
+    .btn-ghost {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      color: var(--text-primary);
+    }
+    .btn-ghost:hover { background: rgba(255,255,255,0.1); }
+    .btn-full { width: 100%; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+
+    /* ── Demo Button ── */
+    .demo-chip {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 10px 20px;
+      border-radius: var(--radius-full);
+      border: 1px solid rgba(245,158,11,0.4);
+      background: rgba(245,158,11,0.08);
+      color: #f59e0b;
+      font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: all 0.2s; margin-top: 10px; width: 100%;
+    }
+    .demo-chip:hover { background: rgba(245,158,11,0.15); transform: translateY(-1px); }
+
+    /* ── Error ── */
+    .form-error { font-size: 12px; color: var(--danger); margin-top: 8px; display: none; text-align: center; font-weight: 600; }
+    .form-error.visible { display: block; }
+  </style>
+</head>
+<body>
+  <div class="aurora-bg" aria-hidden="true">
+    <div class="aurora-blob ab1"></div>
+    <div class="aurora-blob ab2"></div>
+    <div class="aurora-blob ab3"></div>
+  </div>
+  <div class="grid-overlay" aria-hidden="true"></div>
+
+  <div class="auth-layout">
+    <div class="auth-card" role="main">
+
+      <!-- Logo -->
+      <div class="auth-logo">
+        <div class="auth-logo-icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="white" stroke="white" stroke-width="0.5"/>
+          </svg>
+        </div>
+        <div class="auth-logo-text">
+          <span class="auth-logo-name">LMLS</span>
+          <span class="auth-logo-tagline">Last-Minute Life Saver</span>
+        </div>
+      </div>
+
+      <!-- ─── SIGN IN SECTION ─── -->
+      <div id="signin-section" class="auth-section active">
+        <h1 class="step-heading">Sign In</h1>
+        <p class="step-sub">Access your personalized LMLS workspace.</p>
+        
+        <div class="form-group">
+          <label class="form-label" for="signin-email">EMAIL</label>
+          <input type="email" id="signin-email" class="form-input" placeholder="you@security.org" required />
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label" for="signin-password">PASSWORD</label>
+          <input type="password" id="signin-password" class="form-input" placeholder="••••••••" required />
+        </div>
+        
+        <div class="form-error" id="signin-error">Invalid email or password.</div>
+        
+        <button class="btn btn-primary btn-full" onclick="handleSignIn()" style="margin-top: 10px;">
+          Sign in
+        </button>
+        
+        <p class="form-hint" style="text-align: center; margin-top: 20px;">
+          New analyst? <a href="#" onclick="toggleAuthMode('signup')">Create account</a>
+        </p>
+
+        <button class="demo-chip" style="margin-top:24px;" onclick="loadDemo()">
+          🎁 Try Judge Demo Mode — Quick Launch
+        </button>
+      </div>
+
+      <!-- ─── CREATE ACCOUNT SECTION ─── -->
+      <div id="signup-section" class="auth-section">
+        <h1 class="step-heading">Create Account</h1>
+        <p class="step-sub">Start monitoring your deadlines with AI.</p>
+        
+        <div class="form-group">
+          <label class="form-label" for="signup-name">FULL NAME <span>*</span></label>
+          <input type="text" id="signup-name" class="form-input" placeholder="Alex Kumar" required />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="signup-email">EMAIL <span>*</span></label>
+          <input type="email" id="signup-email" class="form-input" placeholder="you@security.org" required />
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label" for="signup-password">PASSWORD <span>*</span></label>
+          <input type="password" id="signup-password" class="form-input" placeholder="••••••••" required />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">YOUR WORK STYLE</label>
+          <div class="work-style-grid">
+            <div class="work-style-option selected" data-style="focused" onclick="selectStyle(this)">
+              <span class="work-style-icon">🎯</span>
+              <div class="work-style-label">Deep Focus</div>
+              <div class="work-style-desc">Long sessions, minimal interrupts</div>
+            </div>
+            <div class="work-style-option" data-style="sprint" onclick="selectStyle(this)">
+              <span class="work-style-icon">⚡</span>
+              <div class="work-style-label">Sprint Mode</div>
+              <div class="work-style-desc">Short bursts, Pomodoro style</div>
+            </div>
+            <div class="work-style-option" data-style="balanced" onclick="selectStyle(this)">
+              <span class="work-style-icon">⚖️</span>
+              <div class="work-style-label">Balanced</div>
+              <div class="work-style-desc">Mix of both, flexible pacing</div>
+            </div>
+            <div class="work-style-option" data-style="crisis" onclick="selectStyle(this)">
+              <span class="work-style-icon">🔥</span>
+              <div class="work-style-label">Crisis Fighter</div>
+              <div class="work-style-desc">Always working under pressure</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="signup-api-key">GEMINI API KEY <span style="font-weight: normal; color: var(--text-muted);">(optional)</span></label>
+          <input type="password" id="signup-api-key" class="form-input" placeholder="AIza..." />
+          <span class="form-hint">Get a free key at <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com</a></span>
+        </div>
+        
+        <div class="form-error" id="signup-error">Account already exists with this email.</div>
+        
+        <button class="btn btn-primary btn-full" onclick="handleSignUp()" style="margin-top: 10px;">
+          Create Account
+        </button>
+        
+        <p class="form-hint" style="text-align: center; margin-top: 20px;">
+          Already have an account? <a href="#" onclick="toggleAuthMode('signin')">Sign in</a>
+        </p>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    'use strict';
+
+    const SETTINGS_KEY = 'lmls_settings';
+    const AUTH_KEY = 'lmls_auth_completed';
+    const USERS_KEY = 'lmls_users';
+    const CURRENT_USER_KEY = 'lmls_current_user';
+    let selectedWorkStyle = 'focused';
+
+    // ── If already logged in, redirect immediately ──
+    (function checkAuth() {
+      // NOTE: This runs BEFORE the localstorage isolation wrapper, so it uses raw localStorage.
+      if (localStorage.getItem(AUTH_KEY) === 'true' && localStorage.getItem(CURRENT_USER_KEY)) {
+        window.location.replace('./index.html');
+      }
+    })();
+
+    function toggleAuthMode(mode) {
+      const signin = document.getElementById('signin-section');
+      const signup = document.getElementById('signup-section');
+      const errorIn = document.getElementById('signin-error');
+      const errorUp = document.getElementById('signup-error');
+      
+      if (errorIn) errorIn.classList.remove('visible');
+      if (errorUp) errorUp.classList.remove('visible');
+
+      if (mode === 'signup') {
+        signin.classList.remove('active');
+        signup.classList.add('active');
+      } else {
+        signup.classList.remove('active');
+        signin.classList.add('active');
+      }
+    }
+
+    function selectStyle(el) {
+      document.querySelectorAll('.work-style-option').forEach(o => o.classList.remove('selected'));
+      el.classList.add('selected');
+      selectedWorkStyle = el.dataset.style;
+    }
+
+    function handleSignIn() {
+      const email = document.getElementById('signin-email').value.trim().toLowerCase();
+      const password = document.getElementById('signin-password').value;
+      const errorEl = document.getElementById('signin-error');
+      
+      errorEl.classList.remove('visible');
+
+      if (!email || !password) {
+        errorEl.textContent = 'Please enter both email and password.';
+        errorEl.classList.add('visible');
+        return;
+      }
+
+      // Load users
+      const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
+      const user = users.find(u => u.email === email && u.password === password);
+
+      if (user) {
+        // Authenticate
+        localStorage.setItem(CURRENT_USER_KEY, email);
+        localStorage.setItem(AUTH_KEY, 'true');
+
+        // Initialize user settings (this triggers user-isolated storage automatically)
+        const settings = {
+          geminiApiKey: user.apiKey || '',
+          geminiModel: 'auto',
+          userName: user.name,
+          workStart: '09:00',
+          workEnd: '18:00',
+          crisisMode: true,
+          voiceResponse: false,
+          autoPriority: true,
+          workStyle: user.workStyle || 'focused'
+        };
+        // This will write to lmls_settings_<email>
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+
+        window.location.href = './index.html';
+      } else {
+        errorEl.textContent = 'Invalid email or password.';
+        errorEl.classList.add('visible');
+      }
+    }
+
+    function handleSignUp() {
+      const name = document.getElementById('signup-name').value.trim();
+      const email = document.getElementById('signup-email').value.trim().toLowerCase();
+      const password = document.getElementById('signup-password').value;
+      const apiKey = document.getElementById('signup-api-key').value.trim();
+      const errorEl = document.getElementById('signup-error');
+
+      errorEl.classList.remove('visible');
+
+      if (!name || !email || !password) {
+        errorEl.textContent = 'Please fill in all required fields (*).';
+        errorEl.classList.add('visible');
+        return;
+      }
+
+      // Basic email regex check
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        errorEl.textContent = 'Please enter a valid email address.';
+        errorEl.classList.add('visible');
+        return;
+      }
+
+      const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
+      if (users.some(u => u.email === email)) {
+        errorEl.textContent = 'An account with this email already exists.';
+        errorEl.classList.add('visible');
+        return;
+      }
+
+      // Add new user
+      const newUser = {
+        name,
+        email,
+        password,
+        workStyle: selectedWorkStyle,
+        apiKey
+      };
+      users.push(newUser);
+      localStorage.setItem(USERS_KEY, JSON.stringify(users));
+
+      // Authenticate new user
+      localStorage.setItem(CURRENT_USER_KEY, email);
+      localStorage.setItem(AUTH_KEY, 'true');
+
+      // Initialize isolated settings
+      const settings = {
+        geminiApiKey: apiKey,
+        geminiModel: 'auto',
+        userName: name,
+        workStart: '09:00',
+        workEnd: '18:00',
+        crisisMode: true,
+        voiceResponse: false,
+        autoPriority: true,
+        workStyle: selectedWorkStyle
+      };
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+
+      // Seed default tasks for new user
+      localStorage.setItem('lmls_load_demo', 'true');
+
+      window.location.href = './index.html';
+    }
+
+    function loadDemo() {
+      // Auto-register or login as judge
+      const email = 'judge@lmls.org';
+      const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
+      
+      let user = users.find(u => u.email === email);
+      if (!user) {
+        user = {
+          name: 'Judge',
+          email: email,
+          password: 'judge',
+          workStyle: 'crisis',
+          apiKey: ''
+        };
+        users.push(user);
+        localStorage.setItem(USERS_KEY, JSON.stringify(users));
+      }
+
+      localStorage.setItem(CURRENT_USER_KEY, email);
+      localStorage.setItem(AUTH_KEY, 'true');
+
+      const settings = {
+        geminiApiKey: '',
+        geminiModel: 'auto',
+        userName: 'Judge',
+        workStart: '09:00',
+        workEnd: '18:00',
+        crisisMode: true,
+        voiceResponse: false,
+        autoPriority: true,
+        workStyle: 'crisis'
+      };
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      localStorage.setItem('lmls_load_demo', 'true');
+
+      window.location.href = './index.html';
+    }
+  </script>
+</body>
+</html>
